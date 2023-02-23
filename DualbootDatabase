@@ -1,0 +1,279 @@
+Создание нескольких таблиц в базе данных PostgreSQL:
+
+
+1) Первой необходимо создать таблицу Regions.
+У нее нет зависимости от других таблиц.
+
+CREATE TABLE Regions (
+    id SERIAL PRIMARY KEY,
+    Name VARCHAR(255) UNIQUE NOT NULL
+);
+
+
+2) Таблицв Locations связана с уже созданной таблицей Regions,
+по этому она создается второй.
+
+CREATE TABLE Locations (
+    id SERIAL PRIMARY KEY,       
+    Address VARCHAR (255) UNIQUE NOT NULL,
+    Region_id INT,
+    FOREIGN KEY (Region_id) REFERENCES Regions (id)
+);
+
+
+3) Далее создаем таблицу Employees и связываем ее внешним ключем
+Manager_id с таблицей Employees (id).
+Создается ключ Department_id, но его связываем после создания таблицы Department.
+
+CREATE TABLE Employees (
+    id SERIAL PRIMARY KEY,       
+    Name VARCHAR (255) NOT NULL,
+    Last_name VARCHAR (255) NOT NULL,
+    Hire_date DATE,
+    Salary INT NOT NULL,
+    Email VARCHAR (255),
+    Manager_id INT,
+    Department_id INT,
+    FOREIGN KEY (Manager_id) 
+        REFERENCES Employees (id) ON DELETE CASCADE
+);
+
+
+4) Создание последней таблицы Departments.
+Связываем таблицу Department внешними ключами с таблицами Locations и Employees.
+
+CREATE TABLE Departments (
+    id SERIAL PRIMARY KEY,       
+    Name VARCHAR (255) UNIQUE NOT NULL,
+    Location_id INT,
+    Manager_id INT,
+    FOREIGN KEY (Location_id) REFERENCES Locations (id),
+    FOREIGN KEY (Manager_id) REFERENCES Employees (id)
+);
+
+
+5) Изменяем таблицу Employees. Связываем Employees с таблицей
+Departments внешним ключом Manager_id. Перед связыванием необходимо
+добавить значения в таблицу Employees, что бы было с чем связать.
+
+ALTER TABLE Employees
+    ADD CONSTRAINT fk_Manager_id
+    FOREIGN KEY (Department_id) REFERENCES Departments (id);
+
+
+##########################################################################
+
+ЗАПРОСЫ К ТАБЛИЦАМ.
+
+
+1) Показать работников у которых нет почты
+или почта не в корпоративном домене (домен dualbootpartners.com)
+
+SELECT id, name, last_name, email FROM employees
+    WHERE email NOT LIKE '%dualbootpartner%' OR email IS NULL;
+
+
+2) Получить список работников нанятых в последние 30 дней.
+
+SELECT name, last_name, hire_date FROM employees 
+    WHERE hire_date >= CURRENT_DATE - INTERVAL '30 days';
+
+
+3) Найти максимальную и минимальную зарплату по каждому департаменту
+
+SELECT Departments.Name as Department_name,
+            MIN(salary) as Minimum_salary, 
+            MAX(salary) as Maximum_salary 
+    FROM departments
+        INNER JOIN employees
+        ON departments.id = employees.department_id
+    GROUP BY Department_name;
+
+
+4) Посчитать количество работников в каждом регионе.
+
+SELECT r.name AS regions, COUNT(*) AS employees
+    FROM employees e
+         JOIN departments d ON e.Department_id = d.id
+           JOIN locations l ON d.Location_id = l.id
+             JOIN regions r ON l.Region_id = r.id
+    GROUP BY r.Name;
+
+
+5) Показать сотрудников у которых фамилия длиннее 10 символов. 
+
+SELECT Name, Last_name FROM Employees
+    WHERE LENGTH(last_name) > 10;
+
+
+
+6) Показать сотрудников с зарплатой выше средней по всей компании.
+
+SELECT Name, Last_name, Salary
+    FROM employees
+    WHERE salary > (SELECT AVG(salary) FROM employees);
+
+
+###################################################################
+
+Examples:
+
+postgres=# SELECT * FROM Employees;
+
+ id |   name    |    last_name    | hire_date  | salary |              email               | manager_id | department_id 
+----+-----------+-----------------+------------+--------+----------------------------------+------------+---------------
+  1 | John      | Doe             | 2022-02-20 |  50000 | johndoe@example.com              |          1 |             2
+  2 | Jane      | Smith           | 2021-01-01 |  60000 | janesmith@example.com            |          1 |             1
+  3 | Bob       | Johnson         | 2020-03-15 |  70000 | bobjohnson@example.com           |          4 |             3
+  4 | Alice     | Lee             | 2023-02-21 |  80000 | alicelee@example.com             |            |             4
+  5 | Amy       | Chen            | 2023-02-22 |   6500 |                                  |          3 |             1
+  6 | David     | Garcia          | 2022-09-01 |    550 | davidgarcia@dualbootpartners.com |          2 |             2
+  7 | Karen     | Wang            | 2022-01-15 |   7500 |                                  |          1 |             3
+  8 | Michael   | Park            | 2021-12-01 |  90000 |                                  |          5 |             2
+  9 | Lisa      | Kim             | 2023-01-10 |  60000 |                                  |          4 |             1
+ 10 | Steven    | Nguyen          | 2022-07-01 |  70000 | stevennguyen@ample.com           |          2 |             3
+ 11 | Catherine | Zhang           | 2022-02-14 |  80000 | catherinezhang@ex.com            |          5 |             2
+ 12 | Jonathan  | Lee             | 2021-06-01 |   8000 | jonathanle@dualbootpartners.com  |          1 |             4
+ 13 | John      | DoeSimpson      | 2022-02-20 |  50000 | johndoe@example.com              |          1 |             2
+ 14 | Jane      | SmithWilliams   | 2021-01-01 |  60000 | janesmith@dualbootpartners.com   |          1 |             1
+ 15 | Bob       | JohnsonMitchell | 2020-03-15 |  70000 | bobjohnson@example.com           |          4 |             3
+ 16 | Alice     | LeeThompson     | 2023-02-21 |  80000 | alicelee@dualbootpartners.com    |          1 |             4
+(16 rows)
+
+
+postgres=# SELECT * FROM Departments;
+
+ id |           name           | location_id | manager_id 
+----+--------------------------+-------------+------------
+  1 | Sales                    |           1 |           
+  2 | Marketing                |           1 |           
+  3 | Engineering              |           2 |          4
+  4 | Finance                  |           3 |          1
+  5 | Human Resources          |           2 |           
+  6 | Operations               |           2 |           
+  7 | Research and Development |           3 |          2
+  8 | Customer Service         |           1 |          3
+(8 rows)
+
+
+postgres=# SELECT * FROM Locations;
+
+ id |   address    | region_id
+----+--------------+-----------
+  1 | 123 Main St  |         1
+  2 | 456 High St  |         3
+  3 | 789 Park Ave |         4
+(3 rows)
+
+
+postgres=# SELECT * FROM Regions;
+
+ id |     name      
+----+---------------
+  1 | North America
+  2 | South America
+  3 | Europe
+  4 | Asia
+  5 | Africa
+  6 | Australia
+(6 rows)
+
+###########################################################################
+
+1) postgres=# SELECT id, name, last_name, email FROM employees 
+                 WHERE email NOT LIKE '%dualbootpartner%' OR email IS NULL;
+
+id |   name    |    last_name    |         email          
+----+-----------+-----------------+------------------------
+  1 | John      | Doe             | johndoe@example.com
+  2 | Jane      | Smith           | janesmith@example.com
+  3 | Bob       | Johnson         | bobjohnson@example.com
+  4 | Alice     | Lee             | alicelee@example.com
+  5 | Amy       | Chen            | 
+  7 | Karen     | Wang            | 
+  8 | Michael   | Park            | 
+  9 | Lisa      | Kim             | 
+ 10 | Steven    | Nguyen          | stevennguyen@ample.com
+ 11 | Catherine | Zhang           | catherinezhang@ex.com
+ 13 | John      | DoeSimpson      | johndoe@example.com
+ 15 | Bob       | JohnsonMitchell | bobjohnson@example.com
+(12 rows)
+
+
+2) postgres=# SELECT name, last_name, hire_date FROM employees
+        WHERE hire_date >= CURRENT_DATE - INTERVAL '30 days';
+
+ name  |  last_name  | hire_date
+-------+-------------+------------
+ Alice | Lee         | 2023-02-21
+ Amy   | Chen        | 2023-02-22
+ Alice | LeeThompson | 2023-02-21
+(3 rows)
+
+
+3) postgres=# SELECT Departments.Name as Department_name,
+            MIN(salary) as Minimum_salary, 
+            MAX(salary) as Maximum_salary 
+        FROM departments
+            INNER JOIN employees
+            ON departments.id = employees.department_id
+        GROUP BY Department_name;
+
+ department_name | minimum_salary | maximum_salary 
+-----------------+----------------+----------------
+ Engineering     |           7500 |          70000
+ Marketing       |            550 |          90000
+ Sales           |           6500 |          60000
+ Finance         |           8000 |          80000
+(4 rows)
+
+
+
+4) postgres=# SELECT r.name AS regions, COUNT(*) AS employees
+        FROM employees e
+             JOIN departments d ON e.Department_id = d.id
+               JOIN locations l ON d.Location_id = l.id
+                 JOIN regions r ON l.Region_id = r.id
+        GROUP BY r.Name;
+
+    regions    | employees 
+---------------+-----------
+ Asia          |         3
+ North America |         9
+ Europe        |         4
+(3 rows)
+
+
+5) postgres=# SELECT Name, Last_name FROM Employees
+        WHERE LENGTH(last_name) > 10;
+
+ name  |    last_name    
+-------+-----------------
+ Jane  | SmithWilliams
+ Bob   | JohnsonMitchell
+ Alice | LeeThompson
+(3 rows)
+ 
+
+6) postgres=# SELECT Name, Last_name, Salary
+        FROM employees
+        WHERE salary > (SELECT AVG(salary) FROM employees);
+
+   name    |    last_name    | salary 
+-----------+-----------------+--------
+ Jane      | Smith           |  60000
+ Bob       | Johnson         |  70000
+ Alice     | Lee             |  80000
+ Michael   | Park            |  90000
+ Lisa      | Kim             |  60000
+ Steven    | Nguyen          |  70000
+ Catherine | Zhang           |  80000
+ Jane      | SmithWilliams   |  60000
+ Bob       | JohnsonMitchell |  70000
+ Alice     | LeeThompson     |  80000
+(10 rows)
+
+ avarage_salary_in_company
+---------------------------
+        52659.375000000000
+
